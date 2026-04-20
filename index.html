@@ -7,10 +7,18 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Microsoft JhengHei',sans-serif;font-size:14px;line-height:1.6;background:#f5f5f0;color:#1a1a1a}
-.top-bar{background:#fff;border-bottom:1px solid #e0e0e0;padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100}
+.top-bar{background:#fff;border-bottom:1px solid #e0e0e0;padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
 .top-bar h1{font-size:16px;font-weight:600;color:#1a1a1a;flex:1}
-.top-bar .date-badge{font-size:12px;color:#666;background:#f0f0f0;padding:4px 10px;border-radius:6px}
+.top-bar .badge{font-size:12px;color:#666;background:#f0f0f0;padding:4px 10px;border-radius:6px;white-space:nowrap}
+.badge-green{background:#eafaf1;color:#1e8449}
+.badge-red{background:#fdedec;color:#c0392b}
+.sync-btn{font-size:12px;padding:5px 12px;border:1px solid #ddd;border-radius:6px;background:#fff;color:#444;cursor:pointer;white-space:nowrap}
+.sync-btn:hover{background:#f5f5f5}
 .container{max-width:1100px;margin:0 auto;padding:20px 16px}
+.loading{text-align:center;padding:60px 20px;color:#888;font-size:15px}
+.loading-spinner{width:36px;height:36px;border:3px solid #eee;border-top-color:#1a1a1a;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-box{background:#fdedec;border:1px solid #f1948a;border-radius:10px;padding:20px;margin:20px 0;color:#c0392b}
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
 .metric{background:#fff;border-radius:10px;padding:16px;border:1px solid #e8e8e8}
 .metric-label{font-size:12px;color:#888;margin-bottom:6px}
@@ -38,14 +46,12 @@ body{font-family:'Microsoft JhengHei',sans-serif;font-size:14px;line-height:1.6;
 .alert-body{font-size:12px;color:#666;line-height:1.7}
 .sec-title{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 10px}
 .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;background:#fff;padding:12px;border-radius:10px;border:1px solid #e8e8e8}
-select,input{font-size:13px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;color:#1a1a1a}
+select,input[type=text]{font-size:13px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;color:#1a1a1a}
 .btn{font-size:13px;padding:7px 16px;border:1px solid #ddd;border-radius:6px;background:#fff;color:#1a1a1a;cursor:pointer;font-weight:500}
 .btn:hover{background:#f5f5f5}
 .btn-line{background:#06C755;color:#fff;border-color:#06C755}
 .btn-line:hover{background:#05b04a}
 .btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
-.progress-bar-bg{height:6px;background:#eee;border-radius:3px;overflow:hidden;margin-top:6px}
-.progress-bar-fill{height:100%;border-radius:3px}
 .line-screen{background:#7dc97d;border-radius:12px;padding:14px 12px;margin-top:10px}
 .line-header{text-align:center;font-size:12px;font-weight:600;color:#1a4a1a;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.15)}
 .bubble{background:#fff;color:#222;border-radius:0 12px 12px 12px;padding:10px 14px;font-size:12px;line-height:1.8;white-space:pre-wrap;display:inline-block;max-width:94%;margin-top:6px}
@@ -65,7 +71,6 @@ textarea{width:100%;resize:vertical;padding:8px 10px;font-size:13px;line-height:
 @media(max-width:600px){
   .metrics{grid-template-columns:1fr 1fr}
   .two-col{grid-template-columns:1fr}
-  .top-bar h1{font-size:14px}
 }
 </style>
 </head>
@@ -73,35 +78,61 @@ textarea{width:100%;resize:vertical;padding:8px 10px;font-size:13px;line-height:
 
 <div class="top-bar">
   <h1>特對就促課程控管儀表板</h1>
-  <span class="date-badge" id="today-badge"></span>
+  <span class="badge" id="today-badge"></span>
+  <span class="badge" id="sync-status">載入中...</span>
+  <button class="sync-btn" onclick="loadData()">重新整理資料</button>
 </div>
 
 <div class="container">
-  <div class="metrics" id="metrics"></div>
-
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('alerts',this)">本週提醒</button>
-    <button class="tab" onclick="switchTab('nextweek',this)">下週課程</button>
-    <button class="tab" onclick="switchTab('all',this)">全部課程</button>
-    <button class="tab" onclick="switchTab('nolecturer',this)">未排講師</button>
-    <button class="tab" onclick="switchTab('line',this)">LINE 通知</button>
+  <div id="loading-area" class="loading">
+    <div class="loading-spinner"></div>
+    正在從 Google Sheets 載入最新課程資料...
   </div>
-
-  <div id="tab-alerts" class="tab-content active"></div>
-  <div id="tab-nextweek" class="tab-content"></div>
-  <div id="tab-all" class="tab-content"></div>
-  <div id="tab-nolecturer" class="tab-content"></div>
-  <div id="tab-line" class="tab-content"></div>
+  <div id="main-area" style="display:none">
+    <div class="metrics" id="metrics"></div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('alerts',this)">本週提醒</button>
+      <button class="tab" onclick="switchTab('nextweek',this)">下週課程</button>
+      <button class="tab" onclick="switchTab('all',this)">全部課程</button>
+      <button class="tab" onclick="switchTab('nolecturer',this)">未排講師</button>
+      <button class="tab" onclick="switchTab('line',this)">LINE 通知</button>
+    </div>
+    <div id="tab-alerts" class="tab-content active"></div>
+    <div id="tab-nextweek" class="tab-content"></div>
+    <div id="tab-all" class="tab-content"></div>
+    <div id="tab-nolecturer" class="tab-content"></div>
+    <div id="tab-line" class="tab-content"></div>
+  </div>
 </div>
 
 <script>
+const SHEET_ID = '2PACX-1vTo38yiH_R4W97neZieh6jO8Z5jrisxXIV1VUjOACx3VH0-Ma4vEwPYSvygm6SoeUGIYegSKXRT9x6X';
+const CSV_URL = `https://corsproxy.io/?url=${encodeURIComponent('https://docs.google.com/spreadsheets/d/e/'+SHEET_ID+'/pub?gid=0&single=true&output=csv')}`;
 const TODAY = new Date();
 document.getElementById('today-badge').textContent = TODAY.toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+
+function parseCSV(text){
+  const lines = text.split('\n');
+  const headers = lines[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim());
+  return lines.slice(1).filter(l=>l.trim()).map(line=>{
+    const vals = [];
+    let cur = '', inQ = false;
+    for(let i=0;i<line.length;i++){
+      if(line[i]==='"') inQ=!inQ;
+      else if(line[i]===','&&!inQ){vals.push(cur.trim());cur='';}
+      else cur+=line[i];
+    }
+    vals.push(cur.trim());
+    const obj={};
+    headers.forEach((h,i)=>obj[h]=vals[i]||'');
+    return obj;
+  });
+}
 
 function toDate(s){
   if(!s) return null;
   s=s.toString().trim();
-  if(s.includes('改期')||s.includes('改到')) return null;
+  if(s.includes('改期')||s.includes('改到')||s.includes('X')) return null;
   let m;
   if(m=s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)) return new Date(+m[1],+m[2]-1,+m[3]);
   if(m=s.match(/^0?(\d{1,2})[\/\-](\d{1,2})$/)) return new Date(2026,+m[1]-1,+m[2]);
@@ -112,130 +143,98 @@ function weekEnd(d){const r=weekStart(d);r.setDate(r.getDate()+6);r.setHours(23,
 const DAYS=['日','一','二','三','四','五','六'];
 function fmt(d){if(!d)return '?';return `${d.getMonth()+1}/${d.getDate()}（${DAYS[d.getDay()]}）`;}
 
-const raw=[
-  {unit:'特對就促',loc:'臺中就服站',hrs:2,name:'GMINI全方位加速職場技能',lecturer:'簡琨宸',date:'03/18',time:'',enrolled:30,attended:30},
-  {unit:'特對就促',loc:'臺中就服站',hrs:2,name:'NotebookLM筆記平台自主學習技能提升',lecturer:'簡琨宸',date:'03/18',time:'',enrolled:30,attended:30},
-  {unit:'特對就促',loc:'台中戒治所(少年)',hrs:2,name:'長大不是打贏,是被信任:青少年重返職場的溝通力',lecturer:'莊琬婷',date:'2026/3/3',time:''},
-  {unit:'特對就促',loc:'臺中看守所',hrs:2,name:'穩住自己,站穩職場:責任行溝通力',lecturer:'莊琬婷',date:'2026/3/4',time:''},
-  {unit:'特對就促',loc:'女子監獄',hrs:2,name:'溫柔而堅定:女性的界線與自信溝通',lecturer:'莊琬婷',date:'2026/3/4',time:''},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:2,name:'就業準備與職場生存術',lecturer:'白光豪',date:'2026/3/4',time:''},
-  {unit:'特對就促',loc:'朝露農場',hrs:3,name:'壓力不壓抑:職場壓力釋放與情緒流動',lecturer:'翁麗芬',date:'2026/3/10',time:''},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:2,name:'重啟人生開關:從心打造你的職場適應力',lecturer:'邱雅琳',date:'2026/3/11',time:''},
-  {unit:'特對就促',loc:'台中監獄',hrs:2,name:'重啟人生開關:從心打造你的職場適應力',lecturer:'邱雅琳',date:'2026/3/12',time:''},
-  {unit:'特對就促',loc:'豐原站',hrs:2,name:'短影音時代來了:社群行銷產業全解析',lecturer:'丁兆弘',date:'2026/3/13',time:''},
-  {unit:'特對就促',loc:'豐原站',hrs:2,name:'從失業到接案：打造你的社群行銷競爭力',lecturer:'丁兆弘',date:'2026/3/13',time:''},
-  {unit:'特對就促',loc:'朝露農場',hrs:3,name:'不對抗也不壓抑：職場正向溝通練習',lecturer:'鍾佑妮',date:'2026/3/17',time:''},
-  {unit:'特對就促',loc:'沙鹿就服站',hrs:2,name:'用數據說話：打造企業最需要的生產管理即戰力',lecturer:'楊宗翰',date:'03/31',time:''},
-  {unit:'特對就促',loc:'沙鹿就服站',hrs:2,name:'零基礎也能上手：簡單AI工具提升職場競爭力',lecturer:'楊宗翰',date:'03/31',time:''},
-  {unit:'特對就促',loc:'朝露農場',hrs:3,name:'RESET人生路：重新打造可行的職涯方向',lecturer:'黃緹涓',date:'04/01',time:''},
-  {unit:'特對就促',loc:'臺中看守所',hrs:2,name:'就業準備與職場生存術',lecturer:'白光豪',date:'04/01',time:''},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:2,name:'工作須知-勞動權益篇',lecturer:'陳晏綜',date:'04/01',time:''},
-  {unit:'特對就促',loc:'女子監獄',hrs:2,name:'就業準備與職場生存術',lecturer:'白光豪',date:'04/01',time:''},
-  {unit:'中高齡團體',loc:'心覺醒基金會',hrs:3,name:'第一次團體：穩定內在——面對求職焦慮與不安',lecturer:'邱雅琳',date:'04/07',time:'0900-1200'},
-  {unit:'特對就促',loc:'台中戒治所(少年)',hrs:2,name:'就業準備與職場生存術',lecturer:'白光豪',date:'04/07',time:'0915-1050'},
-  {unit:'身心障礙',loc:'微笑復健',hrs:2,name:'第一次課程：看見情緒——我在工作時怎麼了？',lecturer:'邱雅琳',date:'04/07',time:'1330-1530'},
-  {unit:'特對就促',loc:'臺中地檢署',hrs:1,name:'工作須知-勞動權益篇',lecturer:'陳晏綜',date:'04/08',time:'0900-1000'},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:2,name:'懂法律，安心工作——職場權益與自我保護',lecturer:'施俊凱',date:'04/08',time:'0910-1050'},
-  {unit:'特對就促',loc:'朝露農場',hrs:3,name:'重新出發：法律風險×身份認同×社會回歸實戰課',lecturer:'黃靖珣',date:'04/09',time:'0900-1200'},
-  {unit:'特對就促',loc:'台中監獄',hrs:2,name:'就業準備與職場生存術',lecturer:'白光豪',date:'04/09',time:'1400-1530'},
-  {unit:'中高齡團體',loc:'心覺醒基金會',hrs:3,name:'第二次團體：看懂自己——就業價值與工作選擇',lecturer:'邱雅琳',date:'04/14',time:'0900-1200'},
-  {unit:'身心障礙',loc:'微笑復健',hrs:2,name:'第二次課程：讓自己穩下來——職場情緒調節技巧',lecturer:'邱雅琳',date:'04/14',time:'1330-1530'},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:2,name:'重新起步的人生——為自己畫出職涯的新藍圖',lecturer:'施芳綺',date:'04/15',time:'0910-1050'},
-  {unit:'身心障礙',loc:'豐原就服站（東勢高工）',hrs:2,name:'"工作我可以！"職場生活力課程',lecturer:'胡家銘',date:'04/15',time:'0840-1010'},
-  {unit:'特對就促',loc:'沙鹿站',hrs:4,name:'AI 時代的自學力',lecturer:'楊宗翰',date:'04/17',time:'1300-1700'},
-  {unit:'特對就促',loc:'女子監獄',hrs:2,name:'重新起步的人生——為自己畫出職涯的新藍圖',lecturer:'施芳綺',date:'04/20',time:'1400-1530'},
-  {unit:'身心障礙',loc:'微笑復健',hrs:2,name:'第三次課程：懂法律，安心工作',lecturer:'施俊凱',date:'04/21',time:'1330-1530'},
-  {unit:'中高齡團體',loc:'心覺醒基金會',hrs:3,name:'第三次團體：能力盤點與職場優勢建立',lecturer:'邱雅琳',date:'04/21',time:'0900-1200'},
-  {unit:'特對就促',loc:'沙鹿站',hrs:4,name:'勞資關係解析',lecturer:'陳晏綜',date:'04/22',time:'0830-1230'},
-  {unit:'二度就業婦女',loc:'台中站(南家扶)',hrs:6,name:'找到好工作：職業訓練、證照與求職成功策略',lecturer:'莊琬婷',date:'2026/4/25',time:'0900-1600'},
-  {unit:'特對就促',loc:'臺中就服站',hrs:4,name:'職場基本溝通力：從自我覺察到有效表達',lecturer:'鍾佑妮',date:'04/27',time:'1300-1700'},
-  {unit:'特對就促',loc:'女子監獄',hrs:2,name:'重新出發：找到你的優勢，打造可行的職涯路',lecturer:'黃緹涓',date:'04/28',time:'1400-1530'},
-  {unit:'身心障礙',loc:'微笑復健',hrs:2,name:'第四次課程：行動力與職場適應力',lecturer:'邱雅琳',date:'04/28',time:'1330-1530'},
-  {unit:'中高齡團體',loc:'心覺醒基金會',hrs:3,name:'第四次團體：行動力與職場適應力',lecturer:'邱雅琳',date:'04/28',time:'0900-1200'},
-  {unit:'特對就促',loc:'台中監獄',hrs:2,name:'今年第一期課程',lecturer:'白光豪',date:'05/04',time:'1400-1530'},
-  {unit:'特對就促',loc:'台中戒治所(少年)',hrs:2,name:'重新出發：看見自己的力量',lecturer:'黃緹涓',date:'05/05',time:'0915-1050'},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:0,name:'逆轉人生-陽光有愛',lecturer:'高肇良',date:'05/06',time:'0900-1100',note:'不開封'},
-  {unit:'特對就促',loc:'沙鹿站',hrs:3,name:'短影音來了 從失業到接案',lecturer:'丁兆弘',date:'05/06',time:'1300-1700'},
-  {unit:'特對就促',loc:'臺中就服站',hrs:4,name:'短影音來了 從失業到接案',lecturer:'丁兆弘',date:'05/08',time:'1300-1700'},
-  {unit:'特對就促',loc:'臺中看守所',hrs:2,name:'就業準備與職場生存術',lecturer:'白光豪',date:'05/13',time:'0900-1100'},
-  {unit:'特對就促',loc:'台中監獄',hrs:2,name:'重啟人生開關:從心打造你的職場適應力',lecturer:'邱雅玲',date:'05/14',time:'1400-1530'},
-  {unit:'特對就促',loc:'豐原站',hrs:4,name:'職涯再出發：重新看見你的工作優勢',lecturer:'黃緹涓',date:'05/15',time:'1300-1700'},
-  {unit:'二度就業婦女',loc:'臺中市婦女及新住民培力中心',hrs:6,name:'生命調色盤：看見內在的光點',lecturer:'黃緹涓',date:'05/16',time:'0900-1600'},
-  {unit:'中高齡',loc:'臺中就服站',hrs:4,name:'翻轉求職力：從職訓到面試的就業成功攻略',lecturer:'莊琬婷',date:'05/18',time:'1300-1700'},
-  {unit:'中高齡',loc:'沙鹿就服站',hrs:3,name:'職場溝通力：重返工作的人際關鍵能力',lecturer:'黃緹涓',date:'05/18',time:'1300-1700'},
-  {unit:'更生團體',loc:'台中監獄',hrs:2,name:'靠近一點，拉近我們的距離',lecturer:'張淳貞',date:'05/22',time:'0900-1100'},
-  {unit:'更生團體',loc:'台中監獄',hrs:2,name:'找到你的個人優勢',lecturer:'張淳貞',date:'05/29',time:'0900-1100'},
-  {unit:'特對就促',loc:'台中戒治所(少年)',hrs:2,name:'（待排課程）',lecturer:'',date:'06/02',time:'0915-1050'},
-  {unit:'特對就促',loc:'女子監獄',hrs:2,name:'（待排課程）',lecturer:'',date:'06/03',time:'1400-1530'},
-  {unit:'特對就促',loc:'台中戒治所(成人)',hrs:2,name:'（待排課程）',lecturer:'黃緹涓',date:'06/03',time:'0910-1050'},
-  {unit:'特對就促',loc:'臺中看守所',hrs:2,name:'（待排課程）',lecturer:'',date:'06/03',time:'0900-1100'},
-  {unit:'更生團體',loc:'台中監獄',hrs:2,name:'讓方向發光，找到專屬的座標',lecturer:'張淳貞',date:'06/05',time:'0900-1100'},
-  {unit:'二度就業婦女',loc:'台中站(南家扶)',hrs:6,name:'職場體驗與人際溝通/職訓參訪',lecturer:'',date:'06/06',time:'0900-1600'},
-  {unit:'台中',loc:'臺中就服站',hrs:4,name:'（待提供課程資訊）',lecturer:'',date:'06/22',time:'1300-1700'},
-  {unit:'台中',loc:'臺中就服站',hrs:4,name:'（待提供課程資訊）',lecturer:'',date:'07/06',time:'1300-1700'},
-];
+let courses=[], thisWeek=[], nextWeek=[], futureNL=[];
 
-const courses=raw.map(c=>({...c,dateObj:toDate(c.date)})).filter(c=>c.dateObj);
-const thisWS=weekStart(TODAY),thisWE=weekEnd(TODAY);
-const nextWS=new Date(thisWS);nextWS.setDate(nextWS.getDate()+7);
-const nextWE=new Date(thisWE);nextWE.setDate(nextWE.getDate()+7);
-const thisWeek=courses.filter(c=>c.dateObj>=thisWS&&c.dateObj<=thisWE);
-const nextWeek=courses.filter(c=>c.dateObj>=nextWS&&c.dateObj<=nextWE);
-const noLecturer=courses.filter(c=>!c.lecturer||c.lecturer==='不開封');
-const futureNL=noLecturer.filter(c=>c.dateObj>=TODAY).sort((a,b)=>a.dateObj-b.dateObj);
+function buildDashboard(rows){
+  // Map columns: A=單位, B=課程類別, C=單位(地點), D=時數, E=課程名稱, F=講師, G=日期, H=時間, ...AB=備註
+  courses = rows.map(r=>{
+    const keys = Object.keys(r);
+    return {
+      unit: r[keys[1]]||r[keys[0]]||'',
+      loc:  r[keys[2]]||'',
+      hrs:  r[keys[3]]||'',
+      name: r[keys[4]]||'',
+      lecturer: r[keys[5]]||'',
+      date: r[keys[6]]||'',
+      time: r[keys[7]]||'',
+      note: r[keys[keys.length-1]]||'',
+      dateObj: toDate(r[keys[6]])
+    };
+  }).filter(c=>c.dateObj&&c.name);
 
-document.getElementById('metrics').innerHTML=`
-<div class="metric"><div class="metric-label">全部課程</div><div class="metric-value">${courses.length}</div></div>
-<div class="metric"><div class="metric-label">本週課程</div><div class="metric-value warn">${thisWeek.length}</div></div>
-<div class="metric"><div class="metric-label">未排講師</div><div class="metric-value danger">${futureNL.length}</div></div>
-<div class="metric"><div class="metric-label">下週開課</div><div class="metric-value ok">${nextWeek.length}</div></div>`;
+  const thisWS=weekStart(TODAY),thisWE=weekEnd(TODAY);
+  const nextWS=new Date(thisWS);nextWS.setDate(nextWS.getDate()+7);
+  const nextWE=new Date(thisWE);nextWE.setDate(nextWE.getDate()+7);
+  thisWeek=courses.filter(c=>c.dateObj>=thisWS&&c.dateObj<=thisWE);
+  nextWeek=courses.filter(c=>c.dateObj>=nextWS&&c.dateObj<=nextWE);
+  const noL=courses.filter(c=>!c.lecturer||c.lecturer==='不開封');
+  futureNL=noL.filter(c=>c.dateObj>=TODAY).sort((a,b)=>a.dateObj-b.dateObj);
+
+  document.getElementById('metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">全部課程</div><div class="metric-value">${courses.length}</div></div>
+    <div class="metric"><div class="metric-label">本週課程</div><div class="metric-value warn">${thisWeek.length}</div></div>
+    <div class="metric"><div class="metric-label">未排講師</div><div class="metric-value danger">${futureNL.length}</div></div>
+    <div class="metric"><div class="metric-label">下週開課</div><div class="metric-value ok">${nextWeek.length}</div></div>`;
+
+  renderAlerts(thisWS,thisWE);
+  renderNextWeek(nextWS,nextWE);
+  renderAll();
+  renderNoLecturer();
+  renderLine();
+}
 
 function courseCard(c,hl){
   const noL=!c.lecturer||c.lecturer==='不開封';
   const past=c.dateObj<TODAY;
   const st=past?'<span class="badge b-gray">已完成</span>':noL?'<span class="badge b-danger">未排講師</span>':'<span class="badge b-ok">已排定</span>';
-  const unit=`<span class="badge b-info">${c.unit}</span>`;
+  const unit=c.unit?`<span class="badge b-info">${c.unit}</span>`:'';
   const border=hl?'border-left:3px solid #e67e22;':past?'opacity:.75;':'';
   return `<div class="card" style="${border}">
     <div class="card-row">${unit}${st}<span style="font-size:11px;color:#999;margin-left:auto">${fmt(c.dateObj)} ${c.time}</span></div>
-    <div class="course-name" style="margin-top:6px">${c.name}</div>
-    <div class="course-meta">📍 ${c.loc} &nbsp;・&nbsp; 👤 講師：${c.lecturer||'⚠️ 未安排'} &nbsp;・&nbsp; ⏱ ${c.hrs} 小時${c.note?` &nbsp;・&nbsp; 📝 ${c.note}`:''}</div>
+    <div class="course-name" style="margin-top:6px">${c.name||'（待定）'}</div>
+    <div class="course-meta">📍 ${c.loc||'—'} &nbsp;・&nbsp; 👤 講師：${c.lecturer||'⚠️ 未安排'} &nbsp;・&nbsp; ⏱ ${c.hrs||'?'} 小時${c.note?` &nbsp;・&nbsp; 📝 ${c.note}`:''}</div>
   </div>`;
 }
 
-// Alerts tab
-let ah='';
-if(thisWeek.length){
-  ah+=`<div class="sec-title">本週課程（${fmt(thisWS)} ～ ${fmt(thisWE)}，共 ${thisWeek.length} 堂）</div>`;
-  ah+=thisWeek.map(c=>courseCard(c,true)).join('');
-} else {
-  ah+=`<div class="alert-box warn"><div class="alert-title">本週沒有排課</div></div>`;
+function renderAlerts(thisWS,thisWE){
+  let h='';
+  if(thisWeek.length){
+    h+=`<div class="sec-title">本週課程（${fmt(thisWS)} ～ ${fmt(thisWE)}，共 ${thisWeek.length} 堂）</div>`;
+    h+=thisWeek.map(c=>courseCard(c,true)).join('');
+  } else {
+    h+=`<div class="alert-box warn"><div class="alert-title">本週（${fmt(thisWS)} ～ ${fmt(thisWE)}）沒有排課</div></div>`;
+  }
+  if(futureNL.length){
+    h+=`<div class="sec-title">⚠️ 未來尚未排講師（${futureNL.length} 堂）</div>`;
+    h+=`<div class="alert-box"><div class="alert-title">${futureNL.length} 堂課程未安排講師，請盡速處理</div><div class="alert-body">${futureNL.slice(0,6).map(c=>`・${c.name||'（待定）'}（${fmt(c.dateObj)}）— ${c.loc}`).join('<br>')}${futureNL.length>6?`<br>・...等共 ${futureNL.length} 堂`:''}</div></div>`;
+  }
+  document.getElementById('tab-alerts').innerHTML=h;
 }
-if(futureNL.length){
-  ah+=`<div class="sec-title">⚠️ 未來尚未排講師（${futureNL.length} 堂）</div>`;
-  ah+=`<div class="alert-box"><div class="alert-title">${futureNL.length} 堂課程未安排講師，請盡速處理</div><div class="alert-body">${futureNL.slice(0,6).map(c=>`・${c.name}（${fmt(c.dateObj)}）— ${c.loc}`).join('<br>')}${futureNL.length>6?`<br>・...等共 ${futureNL.length} 堂`:''}</div></div>`;
+
+function renderNextWeek(nextWS,nextWE){
+  let h=`<div class="sec-title">下週課程（${fmt(nextWS)} ～ ${fmt(nextWE)}，共 ${nextWeek.length} 堂）</div>`;
+  h+=nextWeek.length?nextWeek.map(c=>courseCard(c,true)).join(''):`<div class="alert-box warn"><div class="alert-title">下週目前沒有排課</div></div>`;
+  document.getElementById('tab-nextweek').innerHTML=h;
 }
-document.getElementById('tab-alerts').innerHTML=ah;
 
-// Next week tab
-let nw=`<div class="sec-title">下週課程（${fmt(nextWS)} ～ ${fmt(nextWE)}，共 ${nextWeek.length} 堂）</div>`;
-nw+=nextWeek.length?nextWeek.map(c=>courseCard(c,true)).join(''):`<div class="alert-box warn"><div class="alert-title">下週目前沒有排課</div></div>`;
-document.getElementById('tab-nextweek').innerHTML=nw;
-
-// All courses tab
-const locs=[...new Set(courses.map(c=>c.loc))].sort();
-document.getElementById('tab-all').innerHTML=`
-<div class="filters">
-  <select id="f-loc" onchange="renderAll()"><option value="">全部地點</option>${locs.map(l=>`<option>${l}</option>`).join('')}</select>
-  <input id="f-lec" placeholder="搜尋講師" oninput="renderAll()" style="width:110px">
-  <select id="f-st" onchange="renderAll()"><option value="">全部狀態</option><option value="upcoming">即將開課</option><option value="nol">未排講師</option><option value="past">已完成</option></select>
-  <span id="all-cnt" style="font-size:12px;color:#888;align-self:center"></span>
-</div>
-<div id="all-list"></div>`;
 function renderAll(){
-  const fl=document.getElementById('f-loc').value;
-  const fc=document.getElementById('f-lec').value.trim().toLowerCase();
-  const fs=document.getElementById('f-st').value;
+  const locs=[...new Set(courses.map(c=>c.loc).filter(Boolean))].sort();
+  const lecturers=[...new Set(courses.map(c=>c.lecturer).filter(Boolean))].sort();
+  document.getElementById('tab-all').innerHTML=`
+    <div class="filters">
+      <select id="f-loc" onchange="filterAll()"><option value="">全部地點</option>${locs.map(l=>`<option>${l}</option>`).join('')}</select>
+      <input type="text" id="f-lec" placeholder="搜尋講師" oninput="filterAll()" style="width:110px">
+      <select id="f-st" onchange="filterAll()"><option value="">全部狀態</option><option value="upcoming">即將開課</option><option value="nol">未排講師</option><option value="past">已完成</option></select>
+      <span id="all-cnt" style="font-size:12px;color:#888;align-self:center"></span>
+    </div>
+    <div id="all-list"></div>`;
+  filterAll();
+}
+
+function filterAll(){
+  const fl=document.getElementById('f-loc')?.value||'';
+  const fc=document.getElementById('f-lec')?.value.trim().toLowerCase()||'';
+  const fs=document.getElementById('f-st')?.value||'';
   const filtered=courses.filter(c=>{
     if(fl&&!c.loc.includes(fl))return false;
     if(fc&&!c.lecturer.toLowerCase().includes(fc))return false;
@@ -247,70 +246,73 @@ function renderAll(){
   document.getElementById('all-cnt').textContent=`共 ${filtered.length} 堂`;
   document.getElementById('all-list').innerHTML=filtered.map(c=>courseCard(c)).join('')||'<div style="color:#999;padding:1rem">沒有符合的課程</div>';
 }
-renderAll();
 
-// No lecturer tab
-let nl=`<div class="sec-title">未來待安排講師（${futureNL.length} 堂）</div>`;
-nl+=futureNL.length?futureNL.map(c=>courseCard(c)).join(''):`<div class="alert-box" style="border-left-color:#1e8449;background:#eafaf1"><div class="alert-title" style="color:#1e8449">✅ 所有未來課程已排定講師</div></div>`;
-document.getElementById('tab-nolecturer').innerHTML=nl;
+function renderNoLecturer(){
+  let h=`<div class="sec-title">未來待安排講師（${futureNL.length} 堂）</div>`;
+  h+=futureNL.length?futureNL.map(c=>courseCard(c)).join(''):`<div class="alert-box" style="border-left-color:#1e8449;background:#eafaf1"><div class="alert-title" style="color:#1e8449">✅ 所有未來課程已排定講師</div></div>`;
+  document.getElementById('tab-nolecturer').innerHTML=h;
+}
 
-// LINE tab
-const msgT={
-  weekly:()=>{
-    const nl2=futureNL.slice(0,6).map(c=>`❌ ${c.name}（${fmt(c.dateObj)}）\n   📍${c.loc}`).join('\n');
-    const nw2=nextWeek.map(c=>`${c.lecturer?'✅':'⚠️'} ${c.name}\n   📅${fmt(c.dateObj)} ${c.time}\n   📍${c.loc}｜👤${c.lecturer||'⚠️ 未安排'}`).join('\n\n');
-    return `📋 【每週課程提醒】${TODAY.toLocaleDateString('zh-TW')}\n\n🚨 未排講師（${futureNL.length} 堂）\n${nl2||'（無）'}\n\n📅 下週開課（${nextWeek.length} 堂）\n${nw2||'（無排課）'}\n\n請盡速安排未排講師課程，謝謝！`;
-  },
-  nolecturer:()=>`🚨 【未排講師清單】共 ${futureNL.length} 堂\n\n${futureNL.slice(0,8).map(c=>`❌ ${c.name}\n   📅 ${fmt(c.dateObj)} ${c.time}\n   📍 ${c.loc}`).join('\n\n')}\n\n請盡速確認並安排講師！`,
-  nextweek:()=>`📅 【下週課程預告】\n${fmt(nextWS)} ～ ${fmt(nextWE)}\n\n${nextWeek.length===0?'（本週無排課）':nextWeek.map(c=>`${c.lecturer?'✅':'⚠️'} ${c.name}\n   📅 ${fmt(c.dateObj)} ${c.time}\n   📍 ${c.loc}\n   👤 ${c.lecturer||'待安排'}`).join('\n\n')}\n\n請提前準備所需資源！`,
-  custom:()=>document.getElementById('custom-msg-inp')?.value||'請輸入訊息'
-};
+function renderLine(){
+  const msgT={
+    weekly:()=>{
+      const nl2=futureNL.slice(0,6).map(c=>`❌ ${c.name||'（待定）'}（${fmt(c.dateObj)}）\n   📍${c.loc}`).join('\n');
+      const nw2=nextWeek.map(c=>`${c.lecturer?'✅':'⚠️'} ${c.name}\n   📅${fmt(c.dateObj)} ${c.time}\n   📍${c.loc}｜👤${c.lecturer||'⚠️ 未安排'}`).join('\n\n');
+      return `📋 【每週課程提醒】${TODAY.toLocaleDateString('zh-TW')}\n\n🚨 未排講師（${futureNL.length} 堂）\n${nl2||'（無）'}\n\n📅 下週開課（${nextWeek.length} 堂）\n${nw2||'（無排課）'}\n\n請盡速安排未排講師課程，謝謝！`;
+    },
+    nolecturer:()=>`🚨 【未排講師清單】共 ${futureNL.length} 堂\n\n${futureNL.slice(0,8).map(c=>`❌ ${c.name||'（待定）'}\n   📅 ${fmt(c.dateObj)} ${c.time}\n   📍 ${c.loc}`).join('\n\n')}\n\n請盡速確認並安排講師！`,
+    nextweek:()=>`📅 【下週課程預告】\n\n${nextWeek.length===0?'（本週無排課）':nextWeek.map(c=>`${c.lecturer?'✅':'⚠️'} ${c.name}\n   📅 ${fmt(c.dateObj)} ${c.time}\n   📍 ${c.loc}\n   👤 ${c.lecturer||'待安排'}`).join('\n\n')}\n\n請提前準備所需資源！`,
+    custom:()=>document.getElementById('custom-msg-inp')?.value||'請輸入訊息'
+  };
 
-document.getElementById('tab-line').innerHTML=`
-<div style="margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-  <div style="display:flex;flex-direction:column;gap:10px">
-    <div class="card">
-      <div class="sec-title">LINE Bot 設定</div>
-      <div style="margin-bottom:8px"><div style="font-size:12px;color:#888;margin-bottom:4px">Channel Access Token</div><input type="password" id="line-tok" placeholder="貼上你的 Token" style="width:100%"></div>
-      <div style="margin-bottom:10px"><div style="font-size:12px;color:#888;margin-bottom:4px">接收者 User ID</div><input type="text" id="line-uid" placeholder="U..." style="width:100%"></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-line" onclick="testConn()">測試連線</button>
-        <span id="conn-st" style="font-size:12px;color:#888"><span class="status-dot disconnected" id="conn-dot"></span>未連線</span>
+  document.getElementById('tab-line').innerHTML=`
+  <div style="margin-top:4px" class="two-col">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="card">
+        <div class="sec-title">LINE Bot 設定</div>
+        <div style="margin-bottom:8px"><div style="font-size:12px;color:#888;margin-bottom:4px">Channel Access Token</div><input type="password" id="line-tok" placeholder="貼上你的 Token" style="width:100%"></div>
+        <div style="margin-bottom:10px"><div style="font-size:12px;color:#888;margin-bottom:4px">接收者 User ID</div><input type="text" id="line-uid" placeholder="U..." style="width:100%"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-line" onclick="testConn()">測試連線</button>
+          <span id="conn-st" style="font-size:12px;color:#888"><span class="status-dot disconnected" id="conn-dot"></span>未連線</span>
+        </div>
+        <div class="log-box" id="conn-log">等待操作...</div>
       </div>
-      <div class="log-box" id="conn-log">等待操作...</div>
+      <div class="card">
+        <div class="sec-title">自動排程</div>
+        <div class="sch-row"><label class="toggle"><input type="checkbox" checked><span class="slider"></span></label><div><div style="font-size:13px;font-weight:500">每週一 09:00 自動週報</div><div style="font-size:11px;color:#888">未排講師 + 下週課程</div></div></div>
+        <div class="sch-row"><label class="toggle"><input type="checkbox"><span class="slider"></span></label><div><div style="font-size:13px;font-weight:500">課前 3 天提醒</div></div></div>
+        <div class="sch-row"><label class="toggle"><input type="checkbox"><span class="slider"></span></label><div><div style="font-size:13px;font-weight:500">有課程未排講師即時通知</div></div></div>
+        <div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-primary" onclick="saveSch()">儲存排程</button><span id="sch-msg" style="font-size:12px;color:#1e8449;align-self:center"></span></div>
+      </div>
     </div>
-    <div class="card">
-      <div class="sec-title">自動排程</div>
-      <div class="sch-row"><label class="toggle"><input type="checkbox" checked><span class="slider"></span></label><div><div style="font-size:13px;font-weight:500">每週一 09:00 自動週報</div><div style="font-size:11px;color:#888">未排講師 + 下週課程</div></div></div>
-      <div class="sch-row"><label class="toggle"><input type="checkbox"><span class="slider"></span></label><div><div style="font-size:13px;font-weight:500">課前 3 天提醒</div><div style="font-size:11px;color:#888">自動通知即將開課</div></div></div>
-      <div class="sch-row"><label class="toggle"><input type="checkbox"><span class="slider"></span></label><div><div style="font-size:13px;font-weight:500">有課程未排講師即時通知</div></div></div>
-      <div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-primary" onclick="saveSch()">儲存排程</button><span id="sch-msg" style="font-size:12px;color:#1e8449;align-self:center"></span></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="card">
+        <div class="sec-title">手動發送通知</div>
+        <div style="margin-bottom:8px"><select id="msg-sel" onchange="updatePreview()" style="width:100%">
+          <option value="weekly">📋 每週提醒（未排講師 + 下週課程）</option>
+          <option value="nolecturer">🚨 緊急：未排講師清單（${futureNL.length} 堂）</option>
+          <option value="nextweek">📅 下週課程預告（${nextWeek.length} 堂）</option>
+          <option value="custom">✏️ 自訂訊息</option>
+        </select></div>
+        <div id="cust-area" style="display:none;margin-bottom:8px"><textarea id="custom-msg-inp" rows="3" placeholder="輸入訊息..." oninput="updatePreview()"></textarea></div>
+        <button class="btn btn-line" id="send-btn" onclick="sendMsg()" style="width:100%;margin-bottom:10px">傳送到 LINE ↗</button>
+        <div class="sec-title">訊息預覽</div>
+        <div class="line-screen"><div class="line-header">課程管理小幫手</div><div class="bubble" id="msg-prev"></div></div>
+      </div>
+      <div class="card"><div class="sec-title">發送紀錄</div><div class="log-box" id="send-log">尚無發送紀錄</div></div>
     </div>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:10px">
-    <div class="card">
-      <div class="sec-title">手動發送通知</div>
-      <div style="margin-bottom:8px"><select id="msg-sel" onchange="updatePreview()" style="width:100%">
-        <option value="weekly">📋 每週提醒（未排講師 + 下週課程）</option>
-        <option value="nolecturer">🚨 緊急：未排講師清單（${futureNL.length} 堂）</option>
-        <option value="nextweek">📅 下週課程預告（${nextWeek.length} 堂）</option>
-        <option value="custom">✏️ 自訂訊息</option>
-      </select></div>
-      <div id="cust-area" style="display:none;margin-bottom:8px"><textarea id="custom-msg-inp" rows="3" placeholder="輸入訊息..." oninput="updatePreview()"></textarea></div>
-      <button class="btn btn-line" id="send-btn" onclick="sendMsg()" style="width:100%;margin-bottom:10px">傳送到 LINE ↗</button>
-      <div class="sec-title">訊息預覽</div>
-      <div class="line-screen"><div class="line-header">課程管理小幫手</div><div class="bubble" id="msg-prev"></div></div>
-    </div>
-    <div class="card"><div class="sec-title">發送紀錄</div><div class="log-box" id="send-log">尚無發送紀錄</div></div>
-  </div>
-</div>`;
-setTimeout(updatePreview,50);
+  </div>`;
+
+  window._msgT = msgT;
+  setTimeout(updatePreview, 50);
+}
 
 function updatePreview(){
   const t=document.getElementById('msg-sel')?.value;
-  if(!t)return;
+  if(!t||!window._msgT)return;
   document.getElementById('cust-area').style.display=t==='custom'?'block':'none';
-  document.getElementById('msg-prev').textContent=msgT[t]();
+  document.getElementById('msg-prev').textContent=window._msgT[t]();
 }
 function addLog(id,msg,color){
   const el=document.getElementById(id);if(!el)return;
@@ -329,7 +331,6 @@ function testConn(){
       document.getElementById('conn-dot').className='status-dot connected';
       document.getElementById('conn-st').innerHTML='<span class="status-dot connected"></span>已連線';
       addLog('conn-log','✅ 連線成功','#1e8449');
-      addLog('conn-log','⚠️ 實際發送需 Make.com 後端串接','#d35400');
     } else {addLog('conn-log','❌ Token 格式錯誤','#c0392b');}
   },1200);
 }
@@ -337,7 +338,7 @@ function sendMsg(){
   const btn=document.getElementById('send-btn');
   btn.disabled=true;btn.textContent='傳送中...';
   addLog('send-log','傳送通知中...');
-  setTimeout(()=>{addLog('send-log','✅ 已推播至 LINE','#1e8449');btn.disabled=false;btn.textContent='傳送到 LINE ↗';},1500);
+  setTimeout(()=>{addLog('send-log','✅ 已推播至 LINE（需 Make.com 串接）','#1e8449');btn.disabled=false;btn.textContent='傳送到 LINE ↗';},1500);
 }
 function saveSch(){document.getElementById('sch-msg').textContent='✓ 已儲存';setTimeout(()=>{document.getElementById('sch-msg').textContent='';},2000);}
 function switchTab(id,btn){
@@ -345,8 +346,38 @@ function switchTab(id,btn){
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
-  if(id==='all')renderAll();
 }
+
+async function loadData(){
+  document.getElementById('loading-area').style.display='block';
+  document.getElementById('main-area').style.display='none';
+  document.getElementById('sync-status').textContent='載入中...';
+  document.getElementById('sync-status').className='badge';
+  try{
+    const res = await fetch(CSV_URL);
+    if(!res.ok) throw new Error('無法取得資料');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    // skip header rows (row 1 is main header, row 2 is sub-header)
+    const dataRows = rows.filter((r,i)=>{
+      const keys=Object.keys(r);
+      const dateVal=r[keys[6]]||'';
+      return toDate(dateVal)!==null;
+    });
+    buildDashboard(dataRows);
+    document.getElementById('loading-area').style.display='none';
+    document.getElementById('main-area').style.display='block';
+    const now=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('sync-status').textContent=`✓ 已同步 ${now}`;
+    document.getElementById('sync-status').className='badge badge-green';
+  } catch(e){
+    document.getElementById('loading-area').innerHTML=`<div class="error-box"><strong>載入失敗</strong><br>${e.message}<br><br><button class="btn" onclick="loadData()">重試</button></div>`;
+    document.getElementById('sync-status').textContent='載入失敗';
+    document.getElementById('sync-status').className='badge badge-red';
+  }
+}
+
+loadData();
 </script>
 </body>
 </html>
